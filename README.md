@@ -1,2 +1,2 @@
-# IJO-IJO-WKWKWKW
-tes ijo ijo github
+PUSH KE #1
+WAKTU : 00:00 × 01/01/2018
