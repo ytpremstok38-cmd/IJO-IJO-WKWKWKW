@@ -7,6 +7,10 @@ on:
         description: "Jumlah commit per hari (intensitas hijau)"
         required: false
         default: "25"
+      delay_ms:
+        description: "Delay antar push (milidetik)"
+        required: false
+        default: "150"
 
 permissions:
   contents: write
@@ -25,18 +29,24 @@ jobs:
         run: |
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+          git config push.default current
 
-      - name: Generate full green commits
+      - name: Generate and push commits
         env:
           COMMITS_PER_DAY: ${{ github.event.inputs.commits_per_day || '25' }}
+          DELAY_MS: ${{ github.event.inputs.delay_ms || '150' }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 << 'PY'
           import os
           import random
           import subprocess
+          import time
           from datetime import datetime, timedelta
 
           commits_per_day = int(os.environ.get("COMMITS_PER_DAY", "25"))
+          delay_ms = int(os.environ.get("DELAY_MS", "150"))
+          delay_sec = delay_ms / 1000
 
           def sh(cmd, env=None):
               result = subprocess.run(cmd, shell=True, capture_output=True, text=True, env=env)
@@ -50,7 +60,6 @@ jobs:
 
           for day_offset in range(total_days):
               current_date = start + timedelta(days=day_offset)
-              date_str = current_date.strftime("%Y-%m-%d %H:%M:%S")
               waktu_display = current_date.strftime("%H:%M × %d/%m/%Y")
 
               for c in range(commits_per_day):
@@ -75,19 +84,23 @@ jobs:
 
                   commit_msg = f"PUSH #{commit_counter} | WAKTU : {waktu_display}"
 
-                  result = sh(f'git commit -m "{commit_msg}"', env=env)
+                  commit_result = sh(f'git commit -m "{commit_msg}"', env=env)
 
-                  if result.returncode == 0:
-                      print(f"[ #{commit_counter} ] PUSH IJO IJO DONE!!")
+                  if commit_result.returncode == 0:
+                      push_result = sh("git push origin HEAD:main --force", env=env)
+                      if push_result.returncode == 0:
+                          print(f"[ #{commit_counter} ] PUSH IJO IJO DONE!!")
+                      else:
+                          print(f"[ #{commit_counter} ] PUSH IJO IJO GAGAL:v (push failed)")
+                          print(f"    PUSH ERROR: {push_result.stderr}")
                   else:
-                      print(f"[ #{commit_counter} ] PUSH IJO IJO GAGAL:v")
+                      print(f"[ #{commit_counter} ] PUSH IJO IJO GAGAL:v (commit failed)")
+                      print(f"    COMMIT ERROR: {commit_result.stderr}")
+
+                  time.sleep(delay_sec)
 
           print(f"\n\n=== TOTAL COMMITS: {commit_counter} ===")
           print(f"=== DAYS COVERED: {total_days} ===")
-          print(f"=== COMMITS PER DAY: {commits_per_day} ===")
+          print(f"=== DELAY: {delay_ms}ms ===")
 
           PY
-
-      - name: Force push
-        run: |
-          git push origin HEAD:main --force
