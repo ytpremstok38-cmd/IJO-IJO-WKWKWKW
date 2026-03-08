@@ -11,6 +11,10 @@ on:
         description: "Delay antar push (milidetik)"
         required: false
         default: "150"
+      email:
+        description: "Email GitHub verified (contoh: nama@gmail.com)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -27,15 +31,18 @@ jobs:
 
       - name: Setup Git
         run: |
+          USER_EMAIL="${{ github.event.inputs.email }}"
+          if [ -z "$USER_EMAIL" ]; then
+            USER_EMAIL=$(git log -1 --pretty=format:'%ae' 2>/dev/null || echo "${{ github.actor }}@users.noreply.github.com")
+          fi
           git config user.name "${{ github.actor }}"
-          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
-          git config push.default current
+          git config user.email "$USER_EMAIL"
+          echo "Using email: $USER_EMAIL"
 
       - name: Generate and push commits
         env:
-          COMMITS_PER_DAY: ${{ github.event.inputs.commits_per_day || '25' }}
+          COMMITS_PER_DAY: ${{ github.event.inputs.total_commits || '25' }}
           DELAY_MS: ${{ github.event.inputs.delay_ms || '150' }}
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 << 'PY'
           import os
@@ -88,19 +95,15 @@ jobs:
 
                   if commit_result.returncode == 0:
                       push_result = sh("git push origin HEAD:main --force", env=env)
-                      if push_result.returncode == 0:
+                      if push_result.return_code == 0:
                           print(f"[ #{commit_counter} ] PUSH IJO IJO DONE!!")
                       else:
                           print(f"[ #{commit_counter} ] PUSH IJO IJO GAGAL:v (push failed)")
-                          print(f"    PUSH ERROR: {push_result.stderr}")
                   else:
                       print(f"[ #{commit_counter} ] PUSH IJO IJO GAGAL:v (commit failed)")
-                      print(f"    COMMIT ERROR: {commit_result.stderr}")
 
                   time.sleep(delay_sec)
 
           print(f"\n\n=== TOTAL COMMITS: {commit_counter} ===")
-          print(f"=== DAYS COVERED: {total_days} ===")
-          print(f"=== DELAY: {delay_ms}ms ===")
 
           PY
