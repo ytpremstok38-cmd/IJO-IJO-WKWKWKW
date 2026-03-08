@@ -1,0 +1,93 @@
+name: Auto Push Ijo Ijo Full
+
+on:
+  workflow_dispatch:
+    inputs:
+      commits_per_day:
+        description: "Jumlah commit per hari (intensitas hijau)"
+        required: false
+        default: "25"
+
+permissions:
+  contents: write
+
+jobs:
+  push-ijo-full:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Git
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor_id }}+${{ github.actor }}@users.noreply.github.com"
+
+      - name: Generate full green commits
+        env:
+          COMMITS_PER_DAY: ${{ github.event.inputs.commits_per_day || '25' }}
+        run: |
+          python3 << 'PY'
+          import os
+          import random
+          import subprocess
+          from datetime import datetime, timedelta
+
+          commits_per_day = int(os.environ.get("COMMITS_PER_DAY", "25"))
+
+          def sh(cmd, env=None):
+              result = subprocess.run(cmd, shell=True, capture_output=True, text=True, env=env)
+              return result
+
+          start = datetime(2018, 1, 1, 0, 0, 0)
+          end = datetime.now()
+          total_days = (end - start).days + 1
+
+          commit_counter = 0
+
+          for day_offset in range(total_days):
+              current_date = start + timedelta(days=day_offset)
+              date_str = current_date.strftime("%Y-%m-%d %H:%M:%S")
+              waktu_display = current_date.strftime("%H:%M × %d/%m/%Y")
+
+              for c in range(commits_per_day):
+                  commit_counter += 1
+                  
+                  readme_content = f"PUSH KE #{commit_counter}\nWAKTU : {waktu_display}\n"
+
+                  with open("README.md", "w", encoding="utf-8") as f:
+                      f.write(readme_content)
+
+                  sh("git add README.md")
+
+                  env = os.environ.copy()
+                  random_hour = random.randint(8, 22)
+                  random_minute = random.randint(0, 59)
+                  random_second = random.randint(0, 59)
+                  full_date = current_date.replace(hour=random_hour, minute=random_minute, second=random_second)
+                  full_date_str = full_date.strftime("%Y-%m-%d %H:%M:%S")
+                  
+                  env["GIT_AUTHOR_DATE"] = full_date_str
+                  env["GIT_COMMITTER_DATE"] = full_date_str
+
+                  commit_msg = f"PUSH #{commit_counter} | WAKTU : {waktu_display}"
+
+                  result = sh(f'git commit -m "{commit_msg}"', env=env)
+
+                  if result.returncode == 0:
+                      print(f"[ #{commit_counter} ] PUSH IJO IJO DONE!!")
+                  else:
+                      print(f"[ #{commit_counter} ] PUSH IJO IJO GAGAL:v")
+
+          print(f"\n\n=== TOTAL COMMITS: {commit_counter} ===")
+          print(f"=== DAYS COVERED: {total_days} ===")
+          print(f"=== COMMITS PER DAY: {commits_per_day} ===")
+
+          PY
+
+      - name: Force push
+        run: |
+          git push origin HEAD:main --force
